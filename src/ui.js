@@ -124,7 +124,8 @@ function placeTower(state, x,y, key) {
         canHitAir: !!T.canHitAir, onlyAir: !!T.onlyAir,
         color: T.color, projColor: T.projColor,
         cd: 0,
-        targeting: 'first',
+        targeting: 'closest',   // было 'first'
+        lastDir: 0,             // новый: начальный угол ствола
         upgrades: T.upgrades,
         level: 1,
         buyCost: cost,
