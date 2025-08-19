@@ -1,4 +1,5 @@
 import { dist2 } from '../utils.js';
+import { spawnMuzzle, spawnShell, spawnSmoke } from './particles.js';
 
 export function updateTargeting(state, dt, profile) {
     const gs = state.gameSpeed;
@@ -46,13 +47,40 @@ export function updateTargeting(state, dt, profile) {
 function fireAt(state, t, e, profile) {
     const ang = Math.atan2(e.y - t.y, e.x - t.x);
     t.lastDir = ang;
-    const vx = Math.cos(ang)*t.bulletSpeed;
-    const vy = Math.sin(ang)*t.bulletSpeed;
+
+    const vx = Math.cos(ang) * t.bulletSpeed;
+    const vy = Math.sin(ang) * t.bulletSpeed;
     const dmg = Math.round(t.damage * profile.dmgBonus());
+
     state.bullets.push({
-        x:t.x, y:t.y, vx, vy, speed:t.bulletSpeed, ttl:2.2,
-        dmg, r:3, color:t.projColor||'#fff', splash:t.splash||0,
-        homing:!!t.homing, targetId: t.homing? e.id : 0, owner:t.id,
+        x: t.x, y: t.y,
+        vx, vy,
+        speed: t.bulletSpeed,
+        ttl: 2.2,
+        dmg,
+        r: 3,
+        color: t.projColor || '#ffffff',
+        splash: t.splash || 0,
+        homing: !!t.homing,
+        targetId: t.homing ? e.id : 0,
+        owner: t.id,
         slow: t.slow || null,
+        kind: t.key,             // <- тип для визуала пули
     });
+
+    // эффекты выстрела
+    const muzzleDist = t.key==='cannon' ? 22 : t.key==='aa' ? 16 : 18;
+    const mx = t.x + Math.cos(ang)*muzzleDist;
+    const my = t.y + Math.sin(ang)*muzzleDist;
+
+    if (t.key !== 'cryo') {
+        const muzzleColor = t.key==='cannon' ? '#ffcd7a' : '#ffd58a';
+        spawnMuzzle(state, mx, my, ang, muzzleColor);
+    }
+    if (t.key==='mg' || t.key==='cannon') spawnShell(state, t.x, t.y, ang);
+    if (t.key==='aa') spawnSmoke(state, mx, my, 2);
+
+    // отдача и краткая вспышка
+    t.recoil = t.key==='cannon' ? 1 : 0.6;
+    t.muzzle = 0.06;
 }
