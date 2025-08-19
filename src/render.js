@@ -2,34 +2,68 @@ import { drawMap } from './map.js';
 import { TOWERS } from './data/towers.js';
 
 let mapCanvas, mapCtx;
-function ensureMap(ctx) {
-    if (mapCanvas) return;
-    mapCanvas = document.createElement('canvas');
-    mapCanvas.width = ctx.canvas.width;
-    mapCanvas.height = ctx.canvas.height;
-    mapCtx = mapCanvas.getContext('2d');
-    // важно: map.js рисует в размер CSS-пикселей; если у вас scale(DPR,DPR) применяется к главному ctx,
-    // просто рисуем карту тем же способом: scale не нужен — используем реальные размеры канвы, а потом drawImage 1:1
-    drawMap(mapCtx);
+let lastTransformKey = '';
+let lastW = 0, lastH = 0;
+
+function ensureMap(ctx, state) {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+
+    // Текущая матрица трансформации (важно, если вы масштабируете под DPR)
+    const m = ctx.getTransform();
+    const key = `${m.a},${m.b},${m.c},${m.d},${m.e},${m.f}`;
+
+    if (!mapCanvas) {
+        mapCanvas = document.createElement('canvas');
+        mapCtx = mapCanvas.getContext('2d');
+    }
+
+    // Перестроить карту, если менялся размер, трансформация или карта помечена как грязная
+    if (mapCanvas.width !== w || mapCanvas.height !== h || lastTransformKey !== key || state.mapDirty) {
+        mapCanvas.width = w;
+        mapCanvas.height = h;
+
+        // Полная очистка и применение той же трансформации, что у основного контекста
+        mapCtx.setTransform(1, 0, 0, 1, 0, 0);
+        mapCtx.clearRect(0, 0, w, h);
+        mapCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+
+        drawMap(mapCtx, state);
+
+        lastTransformKey = key;
+        lastW = w; lastH = h;
+        state.mapDirty = false;
+    }
 }
 
 export function render(ctx, state) {
     const c = ctx.canvas;
 
-    // Полная очистка кадра
+    // Подготовим фон-кеш (перестроит при изменениях)
+    ensureMap(ctx, state);
+
+    // Полная очистка фронт-канваса без артефактов
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // сброс трансформаций, если scale/translate были
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.filter = 'none';
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.restore();
 
-    drawMap(ctx, state);
+    // Рисуем фон одним drawImage
+    ctx.drawImage(mapCanvas, 0, 0);
+
+    // Динамика
     drawEnemies(ctx, state);
     drawTowers(ctx, state);
     drawBullets(ctx, state);
-    drawParticles(ctx, state);  // не забудьте вызывать
+    drawParticles(ctx, state);
     drawGhost(ctx, state);
     drawHUD(ctx, state);
 }
+
 function drawEnemies(ctx, state) {
     for (const e of state.enemies) {
         // тень
@@ -168,8 +202,8 @@ function drawTowers(ctx, state) {
 
 function drawParticles(ctx, state) {
     for (const p of state.particles) {
-        const t = p.life / p.ttl;            // 0..1
-        const a = Math.max(0, 1 - t);        // альфа от 1 к 0
+        const t = p.life / p.ttl;
+        const a = Math.max(0, 1 - t);
 
         if (p.type === 'flash') {
             ctx.save();
@@ -186,7 +220,6 @@ function drawParticles(ctx, state) {
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
             ctx.beginPath();
-            // короткий «трейл» назад по вектору скорости
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p.x - (p.vx || 0) * 0.02, p.y - (p.vy || 0) * 0.02);
             ctx.stroke();
@@ -203,7 +236,7 @@ function drawParticles(ctx, state) {
         } else if (p.type === 'smoke') {
             ctx.save();
             ctx.globalAlpha = 0.5 * a;
-            ctx.fillStyle = (p.color || 'rgba(170,190,200,1)'); // альфа задаем через globalAlpha
+            ctx.fillStyle = (p.color || 'rgba(170,190,200,1)');
             ctx.beginPath();
             ctx.arc(p.x, p.y, (p.r || 6) + (p.grow || 16) * t, 0, Math.PI * 2);
             ctx.fill();
@@ -267,21 +300,17 @@ function drawGhost(ctx, state) {
     const x = ui.mouse.x;
     const y = ui.mouse.y;
 
-    // Берём описание башни по ключу, заданному в UI
     const def = TOWERS[ui.build];
-    // Если не нашли — подстраховка, чтобы не упасть
     const range = def ? def.range : 140;
 
     ctx.save();
     ctx.globalAlpha = 0.85;
 
-    // Точка установки: зелёная — можно, красная — нельзя
     ctx.fillStyle = ui.canPlace ? '#4ade80' : '#ef4444';
     ctx.beginPath();
     ctx.arc(x, y, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // Круг радиуса действия будущей башни
     ctx.strokeStyle = 'rgba(120,180,255,0.16)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -292,5 +321,5 @@ function drawGhost(ctx, state) {
 }
 
 function drawHUD(ctx, state) {
-    // можно добавлять всплывающие тексты/частицы и т.п.
+    // HUD по необходимости
 }
