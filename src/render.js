@@ -14,18 +14,22 @@ function ensureMap(ctx) {
 }
 
 export function render(ctx, state) {
-    ensureMap(ctx);
-    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
-    ctx.drawImage(mapCanvas, 0, 0);
+    const c = ctx.canvas;
 
+    // Полная очистка кадра
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // сброс трансформаций, если scale/translate были
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.restore();
+
+    drawMap(ctx, state);
     drawEnemies(ctx, state);
     drawTowers(ctx, state);
     drawBullets(ctx, state);
-    drawParticles(ctx, state);
+    drawParticles(ctx, state);  // не забудьте вызывать
     drawGhost(ctx, state);
     drawHUD(ctx, state);
 }
-
 function drawEnemies(ctx, state) {
     for (const e of state.enemies) {
         // тень
@@ -164,24 +168,54 @@ function drawTowers(ctx, state) {
 
 function drawParticles(ctx, state) {
     for (const p of state.particles) {
-        const t = p.life / p.ttl;
-        if (p.type==='flash') {
-            ctx.fillStyle = p.color.replace(')',','+(1-t).toFixed(3)+')').replace('rgb','rgba');
-            ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r*(1+t), p.r*0.6*(1+t), 0, 0, Math.PI*2); ctx.fill();
-        } else if (p.type==='spark') {
-            ctx.strokeStyle = p.color; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x - (p.vx||0)*0.02, p.y - (p.vy||0)*0.02); ctx.stroke();
-        } else if (p.type==='ring') {
-            ctx.strokeStyle = p.color; ctx.lineWidth = 2*(1-t);
-            ctx.beginPath(); ctx.arc(p.x,p.y, p.r + p.grow*t, 0, Math.PI*2); ctx.stroke();
-        } else if (p.type==='smoke') {
-            const a = 0.5*(1-t);
-            ctx.fillStyle = p.color.replace(/0\.5\)/, a.toFixed(3)+')');
-            ctx.beginPath(); ctx.arc(p.x,p.y, (p.r||6) + (p.grow||16)*t, 0, Math.PI*2); ctx.fill();
-        } else if (p.type==='shell') {
-            ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot||0);
-            ctx.fillStyle = '#caa76b'; ctx.fillRect(-2,-1,4,2); ctx.restore();
+        const t = p.life / p.ttl;            // 0..1
+        const a = Math.max(0, 1 - t);        // альфа от 1 к 0
+
+        if (p.type === 'flash') {
+            ctx.save();
+            ctx.globalAlpha = 0.9 * a;
+            ctx.fillStyle = p.color || '#ffd58a';
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, (p.r || 6) * (1 + t), (p.r || 6) * 0.6 * (1 + t), 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (p.type === 'spark') {
+            ctx.save();
+            ctx.globalAlpha = 0.9 * a;
+            ctx.strokeStyle = p.color || '#ffe2a8';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            // короткий «трейл» назад по вектору скорости
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x - (p.vx || 0) * 0.02, p.y - (p.vy || 0) * 0.02);
+            ctx.stroke();
+            ctx.restore();
+        } else if (p.type === 'ring') {
+            ctx.save();
+            ctx.globalAlpha = 0.9 * a;
+            ctx.strokeStyle = p.color || '#ffd58a';
+            ctx.lineWidth = 2 * a;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, (p.r || 2) + (p.grow || 100) * t, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        } else if (p.type === 'smoke') {
+            ctx.save();
+            ctx.globalAlpha = 0.5 * a;
+            ctx.fillStyle = (p.color || 'rgba(170,190,200,1)'); // альфа задаем через globalAlpha
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, (p.r || 6) + (p.grow || 16) * t, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (p.type === 'shell') {
+            ctx.save();
+            ctx.globalAlpha = a;
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot || 0);
+            ctx.fillStyle = '#caa76b';
+            ctx.fillRect(-2, -1, 4, 2);
+            ctx.restore();
         }
     }
 }
@@ -190,15 +224,20 @@ function drawBullets(ctx, state) {
     for (const b of state.bullets) {
         if (b.kind === 'mg') {
             const ang = Math.atan2(b.vy, b.vx);
+            ctx.save();
             ctx.strokeStyle = 'rgba(255,245,200,0.9)';
             ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(b.x - Math.cos(ang)*6, b.y - Math.sin(ang)*6);
-            ctx.lineTo(b.x + Math.cos(ang)*2, b.y + Math.sin(ang)*2);
+            ctx.lineTo(b.x + Math.cos(ang)*2,  b.y + Math.sin(ang)*2);
             ctx.stroke();
+            ctx.restore();
         } else if (b.kind === 'cannon') {
+            ctx.save();
             ctx.fillStyle = '#ffcd7a';
             ctx.beginPath(); ctx.arc(b.x,b.y,2.8,0,Math.PI*2); ctx.fill();
+            ctx.restore();
         } else if (b.kind === 'aa') {
             const ang = Math.atan2(b.vy, b.vx);
             ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang);
@@ -208,11 +247,15 @@ function drawBullets(ctx, state) {
             ctx.fillRect(-3.8,-3.6, 2, 1.2); ctx.fillRect(-3.8,2.4,2,1.2);
             ctx.restore();
         } else if (b.kind === 'cryo') {
+            ctx.save();
             ctx.fillStyle = '#9bd1ff';
             ctx.beginPath(); ctx.ellipse(b.x,b.y,3.2,2.2, Math.atan2(b.vy,b.vx), 0, Math.PI*2); ctx.fill();
+            ctx.restore();
         } else {
+            ctx.save();
             ctx.fillStyle = b.color || '#ffffff';
             ctx.beginPath(); ctx.arc(b.x,b.y, b.r || 3, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
         }
     }
 }
