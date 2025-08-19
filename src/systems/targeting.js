@@ -61,4 +61,5 @@ function fireAt(state, t, e, profile) {
         targetId: t.homing ? e.id : 0,
         owner: t.id,
     });
+    t.lastDir = Math.atan2(e.y - t.y, e.x - t.x);
 }
