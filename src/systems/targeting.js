@@ -9,7 +9,10 @@ export function updateTargeting(state, dt, profile) {
 
         // поиск целей с учётом типа (воздух/земля)
         const r2 = t.range*t.range;
-        let best=null, bestKey = t.targeting==='first'? Infinity : 1e9, bestD2 = r2;
+        let best = null;
+        let bestProgress = -Infinity; // для 'first' нужно максимизировать, стартуем с -∞
+        let bestD2 = r2;              // для 'closest' — минимизируем дистанцию
+
 
         for (const e of state.enemies) {
             if (!e.alive) continue;
@@ -19,11 +22,17 @@ export function updateTargeting(state, dt, profile) {
             if (d2 > r2) continue;
 
             // приоритет: «ближе к базе» => индекс пути
-            const progress = e.pathIdx + d2*1e-6; // слегка стабилизируем
-            if (t.targeting==='first') {
-                if (progress > bestKey) { best=e; bestKey=progress; bestD2=d2; }
-            } else if (t.targeting==='closest') {
-                if (d2 < bestD2) { best=e; bestKey=progress; bestD2=d2; }
+
+            const progress = e.pathIdx + d2*1e-6; // насколько далеко по пути
+
+            if (t.targeting === 'first') {
+                if (progress > bestProgress) {
+                    best = e; bestProgress = progress;
+                }
+            } else { // 'closest'
+                if (d2 < bestD2) {
+                    best = e; bestD2 = d2;
+                }
             }
         }
 
