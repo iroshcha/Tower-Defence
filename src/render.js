@@ -2,47 +2,42 @@ import { drawMap } from './map.js';
 import { TOWERS } from './data/towers.js';
 
 let mapCanvas, mapCtx;
-let lastTransformKey = '';
-let lastW = 0, lastH = 0;
+let fgCtxRef = null;
+
+// возвращает фронтовый контекст, даже если передали фон
+function useFront(ctx) {
+    return (mapCtx && ctx && ctx.canvas === mapCtx.canvas && fgCtxRef) ? fgCtxRef : ctx;
+}
 
 function ensureMap(ctx, state) {
     const w = ctx.canvas.width;
     const h = ctx.canvas.height;
-
-    // Текущая матрица трансформации (важно, если вы масштабируете под DPR)
-    const m = ctx.getTransform();
-    const key = `${m.a},${m.b},${m.c},${m.d},${m.e},${m.f}`;
 
     if (!mapCanvas) {
         mapCanvas = document.createElement('canvas');
         mapCtx = mapCanvas.getContext('2d');
     }
 
-    // Перестроить карту, если менялся размер, трансформация или карта помечена как грязная
-    if (mapCanvas.width !== w || mapCanvas.height !== h || lastTransformKey !== key || state.mapDirty) {
+    if (mapCanvas.width !== w || mapCanvas.height !== h) {
         mapCanvas.width = w;
         mapCanvas.height = h;
-
-        // Полная очистка и применение той же трансформации, что у основного контекста
-        mapCtx.setTransform(1, 0, 0, 1, 0, 0);
-        mapCtx.clearRect(0, 0, w, h);
-        mapCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
-
-        drawMap(mapCtx, state);
-
-        lastTransformKey = key;
-        lastW = w; lastH = h;
-        state.mapDirty = false;
     }
+
+    // ВАЖНО: перерисовываем карту КАЖДЫЙ кадр (убирает любые «впечатанные» следы)
+    const m = ctx.getTransform();
+    mapCtx.setTransform(1,0,0,1,0,0);
+    mapCtx.clearRect(0, 0, w, h);
+    mapCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    drawMap(mapCtx, state);
 }
 
 export function render(ctx, state) {
-    const c = ctx.canvas;
+    fgCtxRef = ctx; // запоминаем фронтовый контекст
 
-    // Подготовим фон-кеш (перестроит при изменениях)
+    const c = ctx.canvas;
     ensureMap(ctx, state);
 
-    // Полная очистка фронт-канваса без артефактов
+    // Полная очистка фронта
     ctx.save();
     ctx.setTransform(1,0,0,1,0,0);
     ctx.globalCompositeOperation = 'source-over';
@@ -52,10 +47,10 @@ export function render(ctx, state) {
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.restore();
 
-    // Рисуем фон одним drawImage
+    // Фон
     ctx.drawImage(mapCanvas, 0, 0);
 
-    // Динамика
+    // Динамика строго на фронт
     drawEnemies(ctx, state);
     drawTowers(ctx, state);
     drawBullets(ctx, state);
@@ -65,8 +60,9 @@ export function render(ctx, state) {
 }
 
 function drawEnemies(ctx, state) {
+    ctx = useFront(ctx);
+
     for (const e of state.enemies) {
-        // тень
         ctx.fillStyle = '#00000055';
         ctx.beginPath(); ctx.ellipse(e.x+2, e.y+6, e.radius*1.2, e.radius*0.7, 0, 0, Math.PI*2); ctx.fill();
 
@@ -100,7 +96,6 @@ function drawEnemies(ctx, state) {
             ctx.fillStyle='#2a3a2a'; ctx.beginPath(); ctx.arc(6,-2,2.2,0,Math.PI*2); ctx.fill();
             ctx.restore();
         } else {
-            // «серый» гуманоид
             ctx.save(); ctx.translate(e.x,e.y);
             ctx.fillStyle='#9aa6ad'; ctx.beginPath(); ctx.ellipse(0,2, e.radius-2, e.radius, 0, 0, Math.PI*2); ctx.fill();
             ctx.fillStyle='#b3c0c8'; ctx.beginPath(); ctx.ellipse(0,-6, e.radius-4, e.radius-6, 0, 0, Math.PI*2); ctx.fill();
@@ -110,7 +105,6 @@ function drawEnemies(ctx, state) {
             ctx.restore();
         }
 
-        // HP-полоска
         const hpR = Math.max(0, Math.min(1, e.hp / e.maxHp));
         ctx.fillStyle='#ff4757'; ctx.fillRect(e.x-12, e.y-18, 24, 4);
         ctx.fillStyle='#2ed573'; ctx.fillRect(e.x-12, e.y-18, 24*hpR, 4);
@@ -127,6 +121,8 @@ function typeColor(type) {
 }
 
 function drawTowers(ctx, state) {
+    ctx = useFront(ctx);
+
     for (const t of state.towers) {
         const dir = t.lastDir || 0;
         const rec = t.recoil || 0;
@@ -140,23 +136,19 @@ function drawTowers(ctx, state) {
         ctx.save();
         ctx.translate(t.x, t.y);
 
-        // тень
         ctx.fillStyle='#00000055';
         ctx.beginPath(); ctx.ellipse(2,6,13,7,0,0,Math.PI*2); ctx.fill();
 
-        // основание
         const base = ctx.createRadialGradient(-4,-4,2, 0,0,14);
         base.addColorStop(0,'#243341'); base.addColorStop(1,'#17232f');
         ctx.fillStyle = base;
         ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
         ctx.strokeStyle='#2d3e50'; ctx.lineWidth=2; ctx.stroke();
 
-        // поворотный узел
         ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2);
         ctx.fillStyle='#233446'; ctx.fill();
         ctx.strokeStyle='#3b5369'; ctx.lineWidth=2; ctx.stroke();
 
-        // ствол
         ctx.rotate(dir);
         let len=18, w=4, tip=18;
         if (t.key==='cannon') { len=26; w=6; tip=24; }
@@ -166,12 +158,10 @@ function drawTowers(ctx, state) {
         const back = rec * (t.key==='cannon' ? 6 : 3);
         ctx.translate(-back, 0);
 
-        // корпус башни
         ctx.fillStyle = '#2c3e50';
         ctx.fillRect(-6, -8, 12, 16);
         ctx.strokeStyle = '#445a70'; ctx.lineWidth=2; ctx.strokeRect(-6,-8,12,16);
 
-        // ствол(а)
         ctx.fillStyle = t.color;
         if (t.key==='aa') {
             ctx.save(); ctx.translate(0,-3); ctx.fillRect(0,-w/2, len, w); ctx.restore();
@@ -180,7 +170,6 @@ function drawTowers(ctx, state) {
             ctx.fillRect(0, -w/2, len, w);
         }
 
-        // крио-конус
         if (t.key==='cryo') {
             const g = ctx.createRadialGradient(tip,0,0, tip+24,0,28);
             g.addColorStop(0,'rgba(150,210,255,0.35)');
@@ -189,7 +178,6 @@ function drawTowers(ctx, state) {
             ctx.beginPath(); ctx.moveTo(tip, -10); ctx.quadraticCurveTo(tip+26, 0, tip, 10); ctx.closePath(); ctx.fill();
         }
 
-        // вспышка выстрела
         if (t.muzzle && t.key!=='cryo') {
             const a = Math.min(1, t.muzzle/0.06);
             ctx.fillStyle = 'rgba(255,220,140,'+a.toFixed(3)+')';
@@ -201,6 +189,8 @@ function drawTowers(ctx, state) {
 }
 
 function drawParticles(ctx, state) {
+    ctx = useFront(ctx);
+
     for (const p of state.particles) {
         const t = p.life / p.ttl;
         const a = Math.max(0, 1 - t);
@@ -254,6 +244,8 @@ function drawParticles(ctx, state) {
 }
 
 function drawBullets(ctx, state) {
+    ctx = useFront(ctx);
+
     for (const b of state.bullets) {
         if (b.kind === 'mg') {
             const ang = Math.atan2(b.vy, b.vx);
@@ -294,6 +286,8 @@ function drawBullets(ctx, state) {
 }
 
 function drawGhost(ctx, state) {
+    ctx = useFront(ctx);
+
     const ui = state.ui;
     if (!ui.build) return;
 
@@ -321,5 +315,6 @@ function drawGhost(ctx, state) {
 }
 
 function drawHUD(ctx, state) {
-    // HUD по необходимости
+    ctx = useFront(ctx);
+    // HUD при необходимости
 }
