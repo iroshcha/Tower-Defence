@@ -2,16 +2,19 @@ export function updateMovement(state, dt) {
     // Враги по путям
     for (let i=state.enemies.length-1;i>=0;i--) {
         const e = state.enemies[i];
-        const target = e.path[e.pathIdx];
-        if (!target) {
-            // дошли до базы
-            state.lives--;
-            state.enemies.splice(i,1);
-            continue;
+
+        // тик эффектов
+        if (e.slowT && e.slowT > 0) {
+            e.slowT -= dt * state.gameSpeed;
+            if (e.slowT <= 0) { e.slowT = 0; e.slowMul = 1; }
         }
+        const speedMul = e.slowMul || 1;
+
+        const target = e.path[e.pathIdx];
+        if (!target) { state.lives--; state.enemies.splice(i,1); continue; }
         const dx = target.x - e.x, dy = target.y - e.y;
         const len = Math.hypot(dx,dy) || 1;
-        const step = e.speed * dt * state.gameSpeed;
+        const step = e.speed * speedMul * dt * state.gameSpeed;
         if (len <= step) { e.x = target.x; e.y = target.y; e.pathIdx++; }
         else { e.x += dx/len*step; e.y += dy/len*step; }
     }

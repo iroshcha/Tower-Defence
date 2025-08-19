@@ -22,6 +22,8 @@ export function updateSpawn(state, dt) {
         state.spawn.ticking = false;
         state.spawn.waveDone = true;
     }
+    if (!state.spawn.ticking) return;
+    if (state.gameSpeed === 0) return; // пауза
 }
 
 function spawnEnemy(state, type, pathKey, hpMul) {

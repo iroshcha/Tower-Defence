@@ -42,6 +42,10 @@ export function updateBulletsAndHits(state, dt) {
 function applyHit(state, e, b) {
     const real = applyArmor(b.dmg, e.armor);
     e.hp -= real;
+    if (b.slow) {
+        e.slowT = Math.max(e.slowT || 0, b.slow.time);
+        e.slowMul = Math.min(e.slowMul || 1, b.slow.factor);
+    }
 }
 
 function killEnemy(state, idx, e) {

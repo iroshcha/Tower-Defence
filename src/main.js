@@ -75,3 +75,24 @@ function updateUIStats() {
     document.getElementById('plevel').textContent = profile.level;
     document.getElementById('pxp').textContent = profile.xp + '/' + profile.xpToNext();
 }
+
+// после initUI/bindCanvasInteractions
+document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.code === 'Space') {
+        state.gameSpeed = state.gameSpeed === 0 ? 1 : 0;
+        document.getElementById('speed').textContent = state.gameSpeed ? 'x'+state.gameSpeed : 'PAUSE';
+        e.preventDefault();
+    }
+    if (e.key === '1') { state.ui.build = 'mg'; }
+    if (e.key === '2') { state.ui.build = 'cannon'; }
+    if (e.key === '3') { state.ui.build = 'aa'; }
+    if (e.key.toLowerCase() === 't' && state.selection) {
+        const t = state.towers.find(x=>x.id===state.selection);
+        if (t) {
+            const order = ['closest','first','strongest','weakest'];
+            const i = order.indexOf(t.targeting||'closest');
+            t.targeting = order[(i+1)%order.length];
+        }
+    }
+});

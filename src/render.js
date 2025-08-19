@@ -1,9 +1,22 @@
 import { drawMap } from './map.js';
 
-export function render(ctx, state) {
-    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+let mapCanvas, mapCtx;
+function ensureMap(ctx) {
+    if (mapCanvas) return;
+    mapCanvas = document.createElement('canvas');
+    mapCanvas.width = ctx.canvas.width;
+    mapCanvas.height = ctx.canvas.height;
+    mapCtx = mapCanvas.getContext('2d');
+    // важно: map.js рисует в размер CSS-пикселей; если у вас scale(DPR,DPR) применяется к главному ctx,
+    // просто рисуем карту тем же способом: scale не нужен — используем реальные размеры канвы, а потом drawImage 1:1
+    drawMap(mapCtx);
+}
 
-    drawMap(ctx);
+export function render(ctx, state) {
+    ensureMap(ctx);
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+    ctx.drawImage(mapCanvas, 0, 0);
+
     drawEnemies(ctx, state);
     drawTowers(ctx, state);
     drawBullets(ctx, state);

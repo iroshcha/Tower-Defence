@@ -8,10 +8,9 @@ export function initUI(state, profile) {
 
     // локальный шаблон башни для «призрака»
     state.towersTmp = {
-        mg: {...TOWERS.mg},
-        cannon: {...TOWERS.cannon},
-        aa: {...TOWERS.aa},
+        mg: {...TOWERS.mg}, cannon: {...TOWERS.cannon}, aa: {...TOWERS.aa}, cryo: {...TOWERS.cryo},
     };
+
 
     btns.forEach(btn=>{
         btn.addEventListener('click', ()=>{
@@ -120,12 +119,13 @@ function placeTower(state, x,y, key) {
         id, key, name:T.name,
         x, y,
         range: T.range, fireDelay: T.fireDelay, bulletSpeed: T.bulletSpeed,
-        damage: T.damage, splash: T.splash||0, homing: !!T.homing,
+        damage: T.damage, splash: T.splash || 0, homing: !!T.homing,
         canHitAir: !!T.canHitAir, onlyAir: !!T.onlyAir,
-        color: T.color, projColor: T.projColor,
+        color: T.color, projColor: T.projColor,   // <- прокинули цвет снаряда (если есть)
+        slow: T.slow || null,                     // <- прокинули эффект замедления (если есть)
         cd: 0,
-        targeting: 'closest',   // было 'first'
-        lastDir: 0,             // новый: начальный угол ствола
+        targeting: 'closest',
+        lastDir: 0,
         upgrades: T.upgrades,
         level: 1,
         buyCost: cost,
